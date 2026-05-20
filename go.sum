@@ -1,5 +1,5 @@
-github.com/Daniel3579/Go_Practices_2/auth-sdk v0.0.0-20260508175534-0abeadb1fb4f h1:j1HyDMZWmDYkrGE5Xs2Ki48pj72pHOdeq5mpUYq9ld0=
-github.com/Daniel3579/Go_Practices_2/auth-sdk v0.0.0-20260508175534-0abeadb1fb4f/go.mod h1:mM/4mJECFFLABlLkbc8pqaQ/2wHnQ64ANmYKMnRfm70=
+github.com/Daniel3579/auth-service-sdk v0.0.0-20260520104037-a3eed206bc01 h1:iOUBS1EGBHxnhheuQuN9Rhr9RmF8m+6qrPjq1kQdHDc=
+github.com/Daniel3579/auth-service-sdk v0.0.0-20260520104037-a3eed206bc01/go.mod h1:svjDJZgQUtEaSGJ9i5wbTa1/r7bmSPpg/iSn7CptMs8=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=

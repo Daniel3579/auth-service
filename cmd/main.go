@@ -10,7 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	auth_pb "github.com/Daniel3579/Go_Practices_2/auth-sdk/gen"
+	auth_pb "github.com/Daniel3579/auth-service-sdk/gen"
 	"go.uber.org/zap"
 
 	mid "auth-service/middleware"
