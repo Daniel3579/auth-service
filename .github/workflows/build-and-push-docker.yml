@@ -28,7 +28,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
-          context: ./${{ inputs.service-name }}
+          context: .
           push: false
           load: true
           tags: |

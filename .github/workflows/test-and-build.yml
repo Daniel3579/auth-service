@@ -26,12 +26,12 @@ jobs:
 
       - name: Download dependencies
         run: go mod tidy
-        working-directory: ./${{ inputs.service-name }}
+        working-directory: .
 
       - name: Run tests
         run: go test ./...
-        working-directory: ./${{ inputs.service-name }}
+        working-directory: .
 
       - name: Build application
         run: go build ./...
-        working-directory: ./${{ inputs.service-name }}
+        working-directory: .
