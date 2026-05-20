@@ -1,0 +1,19 @@
+name: CI Pipeline
+
+on:
+  push: {}
+  pull_request:
+    branches: "main"
+
+jobs:
+  auth-test-and-build:
+    uses: ./.github/workflows/test-and-build.yml
+    with:
+      service-name: auth
+
+  auth-docker-build:
+    needs: auth-test-and-build
+    uses: ./.github/workflows/build-and-push-docker.yml
+    with:
+      service-name: auth
+    secrets: inherit

@@ -1,0 +1,41 @@
+name: Build and Push Docker Image
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        required: true
+        type: string
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_PAT }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./${{ inputs.service-name }}
+          push: false
+          load: true
+          tags: |
+            ghcr.io/${{ vars.repo }}/${{ inputs.service-name }}-image:${{ github.sha }}
+            ghcr.io/${{ vars.repo }}/${{ inputs.service-name }}-image:latest
+          cache-from: type=gha,scope=${{ inputs.service-name }}
+          cache-to: type=gha,scope=${{ inputs.service-name }},mode=max
+
+      - name: Push all tags
+        run: docker push --all-tags ghcr.io/${{ vars.repo }}/${{ inputs.service-name }}-image
