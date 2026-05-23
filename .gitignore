@@ -9,3 +9,4 @@
 *.key
 data/
 *.pptx
+admin_token_test.go

@@ -10,12 +10,12 @@ import (
 )
 
 type AuthRequest struct {
-	Username string `json:"username"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
 type DeleteRequest struct {
-	Username string `json:"username"`
+	Id int `json:"id"`
 }
 
 type HttpServer struct {
@@ -43,7 +43,7 @@ func (h *HttpServer) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcReq := &auth_pb.AuthRequest{Username: reqBody.Username, Password: reqBody.Password}
+	grpcReq := &auth_pb.AuthRequest{Email: reqBody.Email, Password: reqBody.Password}
 	resp, err := h.GrpcSrv.SignUp(r.Context(), grpcReq)
 
 	if err != nil {
@@ -105,7 +105,7 @@ func (h *HttpServer) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcReq := &auth_pb.AuthRequest{Username: reqBody.Username, Password: reqBody.Password}
+	grpcReq := &auth_pb.AuthRequest{Email: reqBody.Email, Password: reqBody.Password}
 	resp, err := h.GrpcSrv.Login(r.Context(), grpcReq)
 
 	if err != nil {
@@ -134,7 +134,7 @@ func (h *HttpServer) Delete(w http.ResponseWriter, r *http.Request) {
 	md := metadata.Pairs("authorization", accessToken)
 	ctx := metadata.NewOutgoingContext(r.Context(), md)
 
-	grpcReq := &auth_pb.DeleteRequest{Username: reqBody.Username}
+	grpcReq := &auth_pb.DeleteRequest{Id: int32(reqBody.Id)}
 	resp, err := h.GrpcSrv.Delete(ctx, grpcReq)
 
 	if err != nil {

@@ -28,11 +28,11 @@ func GetTokenMetadata(ctx context.Context) (string, error) {
 	return tokens[0], nil
 }
 
-func IsValid(token string, tokenType string) (string, error) {
+func IsValid(token string, tokenType string) (int, string, error) {
 	secretKey := []byte(os.Getenv("SECRET_KEY"))
 	if len(secretKey) == 0 {
 		logger.Log.Error("SECRET_KEY environment variable is not set")
-		return "", fmt.Errorf("SECRET_KEY not configured")
+		return -1, "", fmt.Errorf("SECRET_KEY not configured")
 	}
 
 	claims := jwt.MapClaims{}
@@ -52,7 +52,7 @@ func IsValid(token string, tokenType string) (string, error) {
 			zap.String("token_type", tokenType),
 			zap.Error(err),
 		)
-		return "", fmt.Errorf("invalid token: %w", err)
+		return -1, "", fmt.Errorf("invalid token: %w", err)
 	}
 
 	// Проверяем тип токена
@@ -61,7 +61,7 @@ func IsValid(token string, tokenType string) (string, error) {
 		logger.Log.Warn("token type claim missing or invalid",
 			zap.String("expected_type", tokenType),
 		)
-		return "", fmt.Errorf("token type claim missing")
+		return -1, "", fmt.Errorf("token type claim missing")
 	}
 
 	if claimedType != tokenType {
@@ -69,25 +69,34 @@ func IsValid(token string, tokenType string) (string, error) {
 			zap.String("expected_type", tokenType),
 			zap.String("actual_type", claimedType),
 		)
-		return "", fmt.Errorf("invalid token type: expected %s, got %s", tokenType, claimedType)
+		return -1, "", fmt.Errorf("invalid token type: expected %s, got %s", tokenType, claimedType)
 	}
 
-	// Получаем username из claims
-	username, ok := claims["username"].(string)
+	// Получаем id из claims
+	idd, ok := claims["user_id"].(float64)
+	id := int(idd)
 	if !ok {
-		logger.Log.Warn("username claim missing or invalid")
-		return "", fmt.Errorf("username claim missing from token")
+		logger.Log.Warn("id claim missing or invalid")
+		return -1, "", fmt.Errorf("id claim missing from token")
+	}
+
+	// Получаем role из claims
+	role, ok := claims["role"].(string)
+	if !ok {
+		logger.Log.Warn("id claim missing or invalid")
+		return -1, "", fmt.Errorf("id claim missing from token")
 	}
 
 	logger.Log.Debug("token validated successfully",
-		zap.String("username", username),
+		zap.Int("user_id", id),
+		zap.String("role", role),
 		zap.String("token_type", tokenType),
 	)
 
-	return username, nil
+	return id, role, nil
 }
 
-func GenerateToken(username string, tokenType string, duration time.Duration) (string, error) {
+func GenerateToken(id int, role string, tokenType string, duration time.Duration) (string, error) {
 	secretKey := []byte(os.Getenv("SECRET_KEY"))
 	if len(secretKey) == 0 {
 		logger.Log.Error("SECRET_KEY environment variable is not set")
@@ -95,16 +104,18 @@ func GenerateToken(username string, tokenType string, duration time.Duration) (s
 	}
 
 	claims := jwt.MapClaims{
-		"username": username,
-		"type":     tokenType,
-		"exp":      time.Now().Add(duration).Unix(),
+		"user_id": id,
+		"role":    role,
+		"type":    tokenType,
+		"exp":     time.Now().Add(duration).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedToken, err := token.SignedString(secretKey)
 	if err != nil {
 		logger.Log.Error("token signing failed",
-			zap.String("username", username),
+			zap.Int("user_id", id),
+			zap.String("role", role),
 			zap.String("token_type", tokenType),
 			zap.Error(err),
 		)
@@ -112,7 +123,8 @@ func GenerateToken(username string, tokenType string, duration time.Duration) (s
 	}
 
 	logger.Log.Debug("token generated successfully",
-		zap.String("username", username),
+		zap.Int("user_id", id),
+		zap.String("role", role),
 		zap.String("token_type", tokenType),
 		zap.Duration("duration", duration),
 	)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	auth_pb "github.com/Daniel3579/auth-service-sdk/gen"
 	_ "github.com/lib/pq"
 	"go.uber.org/zap"
 )
@@ -15,8 +16,8 @@ var db *sql.DB
 // ——————————————————————————————————————————————————————————————————————————————
 
 type InsertRequest struct {
-	Username string
-	Hash     string
+	Email string
+	Hash  string
 }
 
 // ——————————————————————————————————————————————————————————————————————————————
@@ -55,25 +56,27 @@ func CloseDB() error {
 
 // ——————————————————————————————————————————————————————————————————————————————
 
-func InsertIntoAuth(req *InsertRequest) error {
-	_, err := db.Exec("INSERT INTO auth (username, hash) VALUES ($1, $2);", req.Username, req.Hash)
+func InsertIntoAuth(req *InsertRequest) (*auth_pb.SignUpResponse, error) {
+	var res auth_pb.SignUpResponse
+
+	err := db.QueryRow("INSERT INTO users (email, hash) VALUES ($1, $2) Returning *;", req.Email, req.Hash).Scan(&res.Id, &res.Email, &res.Hash)
 	if err != nil {
-		logger.Log.Error("Failed to insert into auth table",
-			zap.String("username", req.Username),
+		logger.Log.Error("Failed to insert into users table",
+			zap.String("email", req.Email),
 			zap.Error(err),
 		)
-		return fmt.Errorf("Не удалось записать в бд: %w", err)
+		return nil, fmt.Errorf("Не удалось записать в бд: %w", err)
 	}
 
-	logger.Log.Info("User registered successfully", zap.String("username", req.Username))
-	return nil
+	logger.Log.Info("User registered successfully", zap.String("email", req.Email))
+	return &res, nil
 }
 
-func DeleteFromAuth(username string) error {
-	res, err := db.Exec("Delete from auth where username=$1;", username)
+func DeleteFromAuth(id int) error {
+	res, err := db.Exec("Delete from users where id=$1;", id)
 	if err != nil {
-		logger.Log.Error("Failed to delete from auth table",
-			zap.String("username", username),
+		logger.Log.Error("Failed to delete from users table",
+			zap.Int("id", id),
 			zap.Error(err),
 		)
 		return fmt.Errorf("Ошибка при попытке удаления: %w", err)
@@ -82,35 +85,37 @@ func DeleteFromAuth(username string) error {
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
 		logger.Log.Error("Failed to get rows affected",
-			zap.String("username", username),
+			zap.Int("id", id),
 			zap.Error(err),
 		)
 		return fmt.Errorf("Failed to get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
-		logger.Log.Warn("No rows affected for delete operation", zap.String("username", username))
+		logger.Log.Warn("No rows affected for delete operation", zap.Int("id", id))
 		return fmt.Errorf("User not found")
 	}
 
-	logger.Log.Info("User deleted successfully", zap.String("username", username))
+	logger.Log.Info("User deleted successfully", zap.Int("id", id))
 	return nil
 }
 
-func SelectHash(username string) (string, error) {
+func SelectHash(email string) (int, string, error) {
+	var id int
 	var hash string
-	err := db.QueryRow("Select hash from auth where username=$1;", username).Scan(&hash)
+
+	err := db.QueryRow("Select id, hash from users where email=$1;", email).Scan(&id, &hash)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			logger.Log.Warn("User not found", zap.String("username", username))
-			return "", fmt.Errorf("User not found")
+			logger.Log.Warn("User not found", zap.String("email", email))
+			return -1, "", fmt.Errorf("User not found")
 		}
 		logger.Log.Error("Failed to query hash",
-			zap.String("username", username),
+			zap.String("email", email),
 			zap.Error(err),
 		)
-		return "", fmt.Errorf("Не удалось получить хеш: %w", err)
+		return -1, "", fmt.Errorf("Не удалось получить хеш: %w", err)
 	}
 
-	return hash, nil
+	return id, hash, nil
 }

@@ -50,9 +50,9 @@ func TestGenerateAndValidateToken_Success(t *testing.T) {
 	os.Setenv("SECRET_KEY", "test-secret-key")
 	defer os.Unsetenv("SECRET_KEY")
 
-	username := "alice"
+	id := 13
 	// generate access token
-	token, err := GenerateToken(username, "access", time.Minute*5)
+	token, err := GenerateToken(id, "user", "access", time.Minute*5)
 	if err != nil {
 		t.Fatalf("GenerateToken returned error: %v", err)
 	}
@@ -61,12 +61,12 @@ func TestGenerateAndValidateToken_Success(t *testing.T) {
 	}
 
 	// validate token
-	gotUsername, err := IsValid(token, "access")
+	gotId, _, err := IsValid(token, "access")
 	if err != nil {
 		t.Fatalf("IsValid returned error for valid token: %v", err)
 	}
-	if gotUsername != username {
-		t.Fatalf("IsValid returned username %q, want %q", gotUsername, username)
+	if gotId != id {
+		t.Fatalf("IsValid returned username %q, want %q", gotId, id)
 	}
 }
 
@@ -74,15 +74,15 @@ func TestGenerateAndValidateToken_WrongType(t *testing.T) {
 	os.Setenv("SECRET_KEY", "test-secret-key")
 	defer os.Unsetenv("SECRET_KEY")
 
-	username := "bob"
+	id := 17
 	// generate refresh token
-	token, err := GenerateToken(username, "refresh", time.Hour)
+	token, err := GenerateToken(id, "user", "refresh", time.Hour)
 	if err != nil {
 		t.Fatalf("GenerateToken returned error: %v", err)
 	}
 
 	// Try validate as access token -> should fail
-	_, err = IsValid(token, "access")
+	_, _, err = IsValid(token, "access")
 	if err == nil {
 		t.Fatal("IsValid succeeded for token with wrong type; expected error")
 	}
@@ -92,14 +92,14 @@ func TestGenerateAndValidateToken_Expired(t *testing.T) {
 	os.Setenv("SECRET_KEY", "test-secret-key")
 	defer os.Unsetenv("SECRET_KEY")
 
-	username := "carol"
+	id := 19
 	// generate token with negative duration (already expired)
-	token, err := GenerateToken(username, "access", -time.Minute)
+	token, err := GenerateToken(id, "user", "access", -time.Minute)
 	if err != nil {
 		t.Fatalf("GenerateToken returned error: %v", err)
 	}
 
-	_, err = IsValid(token, "access")
+	_, _, err = IsValid(token, "access")
 	if err == nil {
 		t.Fatal("IsValid succeeded for expired token; expected error")
 	}

@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-func loadTLSCredentials() (credentials.TransportCredentials, error) {
+func loadTLSConfig() (*tls.Config, error) {
 	certFile := os.Getenv("AUTH_SERVICE_CERT_FILE")
 	keyFile := os.Getenv("AUTH_SERVICE_KEY_FILE")
 	caFile := os.Getenv("AUTH_SERVICE_CA_FILE")
@@ -45,13 +45,13 @@ func loadTLSCredentials() (credentials.TransportCredentials, error) {
 		return nil, fmt.Errorf("failed to append CA cert")
 	}
 
-	tlsConfig := &tls.Config{
+	tlsConfig := tls.Config{
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caCertPool,
 		ServerName:   "auth-service", // Имя из CN сертификата Auth
 	}
 
-	return credentials.NewTLS(tlsConfig), nil
+	return &tlsConfig, nil
 }
 
 func main() {
@@ -142,7 +142,8 @@ func main() {
 		}
 
 		// Загружаем TLS credentials
-		tlsCreds, err := loadTLSCredentials()
+		tlsConfig, err := loadTLSConfig()
+		tlsCreds := credentials.NewTLS(tlsConfig)
 		if err != nil {
 			logger.Log.Error("Failed to load TLS credentials", zap.Error(err))
 		}
@@ -168,16 +169,26 @@ func main() {
 		http.HandleFunc("/login", handlers.EnableCORS(hs.Login))
 		http.HandleFunc("/delete", handlers.EnableCORS(hs.Delete))
 
-		lis, err := net.Listen("tcp", rest_port)
-		if err != nil {
-			logger.Log.Fatal("Failed to listen on port", zap.Error(err))
+		// lis, err := net.Listen("tcp", rest_port)
+		// if err != nil {
+		// 	logger.Log.Fatal("Failed to listen on port", zap.Error(err))
+		// }
+		// defer lis.Close()
+
+		server := &http.Server{
+			Addr:      rest_port,
+			TLSConfig: tlsConfig,
 		}
-		defer lis.Close()
 
 		logger.Log.Info("Auth REST server is running", zap.String("port", rest_port))
-		if err := http.Serve(lis, nil); err != nil {
+		if err := server.ListenAndServeTLS("", ""); err != nil {
 			logger.Log.Fatal("Failed to serve", zap.Error(err))
 		}
+
+		// logger.Log.Info("Auth REST server is running", zap.String("port", rest_port))
+		// if err := http.Serve(lis, nil); err != nil {
+		// 	logger.Log.Fatal("Failed to serve", zap.Error(err))
+		// }
 
 	}()
 

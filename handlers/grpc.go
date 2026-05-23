@@ -3,6 +3,7 @@ package handlers
 import (
 	"auth-service/db"
 	"auth-service/logger"
+	user_client "auth-service/user"
 	"auth-service/utils"
 	"context"
 	"time"
@@ -19,38 +20,64 @@ type Server struct {
 }
 
 func (s *Server) SignUp(ctx context.Context, req *auth_pb.AuthRequest) (*auth_pb.SignUpResponse, error) {
-	username := req.GetUsername()
+	email := req.GetEmail()
 
-	if username == "" || req.GetPassword() == "" {
-		logger.Log.Warn("signup attempt with missing credentials", zap.String("username", username))
-		return nil, status.Error(codes.InvalidArgument, "username and password required")
+	if email == "" || req.GetPassword() == "" {
+		logger.Log.Warn("signup attempt with missing credentials", zap.String("email", email))
+		return nil, status.Error(codes.InvalidArgument, "email and password required")
 	}
 
 	hash, err := utils.HashPassword(req.GetPassword())
 	if err != nil {
 		logger.Log.Error("password hashing failed",
-			zap.String("username", username),
+			zap.String("email", email),
 			zap.Error(err),
 		)
 		return nil, status.Errorf(codes.Internal, "password hashing failed: %v", err)
 	}
 
-	err = db.InsertIntoAuth(&db.InsertRequest{
-		Username: username,
-		Hash:     hash,
+	res, err := db.InsertIntoAuth(&db.InsertRequest{
+		Email: email,
+		Hash:  hash,
 	})
 	if err != nil {
 		logger.Log.Error("signup failed",
-			zap.String("username", username),
+			zap.String("email", email),
 			zap.Error(err),
 		)
 		return nil, status.Errorf(codes.Internal, "signup failed: %v", err)
 	}
 
-	return &auth_pb.SignUpResponse{
-		Username: username,
-		Hash:     hash,
-	}, nil
+	logger.Log.Info("user sign up successfully", zap.String("email", email))
+
+	user_id := int(res.GetId())
+	err, code := user_client.RequestCreate(user_id)
+	if err != nil {
+		logger.Log.Error("Create UserProfile failed",
+			zap.Int("user_id", user_id),
+			zap.String("email", email),
+			zap.Error(err),
+		)
+
+		err = db.DeleteFromAuth(user_id)
+		if err != nil {
+			logger.Log.Error("delete account failed",
+				zap.Int("user_id", user_id),
+				zap.String("email", email),
+				zap.Error(err),
+			)
+			return nil, status.Errorf(codes.Internal, "delete failed: %v", err)
+		}
+
+		logger.Log.Info("user deleted in successfully",
+			zap.Int("user_id", user_id),
+			zap.String("email", email),
+		)
+
+		return nil, status.Errorf(code, "Create UserProfile failed: %v", err)
+	}
+
+	return res, nil
 }
 
 func (s *Server) Validate(ctx context.Context, _ *emptypb.Empty) (*auth_pb.ValidateResponse, error) {
@@ -60,14 +87,16 @@ func (s *Server) Validate(ctx context.Context, _ *emptypb.Empty) (*auth_pb.Valid
 		return nil, status.Error(codes.Unauthenticated, "missing token")
 	}
 
-	username, err := utils.IsValid(token, "access")
+	id, role, err := utils.IsValid(token, "access")
 	if err != nil {
 		logger.Log.Warn("invalid access token", zap.Error(err))
 		return nil, status.Error(codes.Unauthenticated, "invalid token")
 	}
 
+	logger.Log.Info("validate successfully", zap.Int("id", id), zap.String("role", role))
 	return &auth_pb.ValidateResponse{
-		Username: username,
+		Id:   int32(id),
+		Role: role,
 	}, nil
 }
 
@@ -78,61 +107,64 @@ func (s *Server) RefreshToken(ctx context.Context, _ *emptypb.Empty) (*auth_pb.R
 		return nil, status.Error(codes.Unauthenticated, "missing token")
 	}
 
-	username, err := utils.IsValid(refreshToken, "refresh")
+	id, role, err := utils.IsValid(refreshToken, "refresh")
 	if err != nil {
 		logger.Log.Warn("invalid refresh token", zap.Error(err))
 		return nil, status.Error(codes.Unauthenticated, "invalid token")
 	}
 
-	accessToken, err := utils.GenerateToken(username, "access", time.Minute*15)
+	accessToken, err := utils.GenerateToken(id, role, "access", time.Minute*15)
 	if err != nil {
 		logger.Log.Error("access token generation failed",
-			zap.String("username", username),
+			zap.Int("id", id),
+			zap.String("role", role),
 			zap.Error(err),
 		)
 		return nil, status.Errorf(codes.Internal, "token generation failed: %v", err)
 	}
 
-	logger.Log.Info("access token refreshed", zap.String("username", username))
+	logger.Log.Info("access token refreshed", zap.Int("id", id), zap.String("role", role))
 	return &auth_pb.RefreshResponse{
 		AccessToken: accessToken,
 	}, nil
 }
 
 func (s *Server) Login(ctx context.Context, req *auth_pb.AuthRequest) (*auth_pb.LoginResponse, error) {
-	username := req.GetUsername()
+	email := req.GetEmail()
 
-	hash, err := db.SelectHash(username)
+	id, hash, err := db.SelectHash(email)
 	if err != nil {
-		logger.Log.Warn("login attempt for non-existent user", zap.String("username", username))
+		logger.Log.Warn("login attempt for non-existent user", zap.String("email", email))
 		return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
 	}
 
 	err = utils.CheckPassword(hash, req.GetPassword())
 	if err != nil {
-		logger.Log.Warn("invalid password attempt", zap.String("username", username))
+		logger.Log.Warn("invalid password attempt", zap.String("email", email))
 		return nil, status.Error(codes.Unauthenticated, "invalid credentials")
 	}
 
-	refreshToken, err := utils.GenerateToken(username, "refresh", time.Hour*24*7)
+	refreshToken, err := utils.GenerateToken(id, "user", "refresh", time.Hour*24*7)
 	if err != nil {
 		logger.Log.Error("refresh token generation failed",
-			zap.String("username", username),
+			zap.Int("id", id),
+			zap.String("email", email),
 			zap.Error(err),
 		)
 		return nil, status.Errorf(codes.Internal, "token generation failed: %v", err)
 	}
 
-	accessToken, err := utils.GenerateToken(username, "access", time.Minute*15)
+	accessToken, err := utils.GenerateToken(id, "user", "access", time.Minute*15)
 	if err != nil {
 		logger.Log.Error("access token generation failed",
-			zap.String("username", username),
+			zap.Int("id", id),
+			zap.String("email", email),
 			zap.Error(err),
 		)
 		return nil, status.Errorf(codes.Internal, "token generation failed: %v", err)
 	}
 
-	logger.Log.Info("user logged in successfully", zap.String("username", username))
+	logger.Log.Info("user logged in successfully", zap.Int("id", id), zap.String("email", email))
 	return &auth_pb.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -146,30 +178,36 @@ func (s *Server) Delete(ctx context.Context, req *auth_pb.DeleteRequest) (*empty
 		return nil, status.Error(codes.Unauthenticated, "missing token")
 	}
 
-	tokenUsername, err := utils.IsValid(token, "access")
+	tokenId, tokenRole, err := utils.IsValid(token, "access")
 	if err != nil {
 		logger.Log.Warn("delete attempt: invalid token")
 		return nil, status.Error(codes.Unauthenticated, "invalid token")
 	}
 
-	requestedUsername := req.GetUsername()
+	requestedId := int(req.GetId())
 
-	if tokenUsername != requestedUsername {
-		logger.Log.Warn("delete attempt: permission denied",
-			zap.String("token_username", tokenUsername),
-			zap.String("requested_username", requestedUsername),
-		)
-		return nil, status.Error(codes.PermissionDenied, "can only delete own account")
+	if tokenRole == "user" {
+		if tokenId != requestedId {
+			logger.Log.Warn("delete attempt: permission denied",
+				zap.String("token_role", tokenRole),
+				zap.Int("token_id", tokenId),
+			)
+			return nil, status.Error(codes.PermissionDenied, "can only delete own account")
+		}
 	}
 
-	err = db.DeleteFromAuth(requestedUsername)
+	err = db.DeleteFromAuth(requestedId)
 	if err != nil {
 		logger.Log.Error("delete account failed",
-			zap.String("username", requestedUsername),
+			zap.String("token_role", tokenRole),
+			zap.Int("token_id", tokenId),
 			zap.Error(err),
 		)
+
 		return nil, status.Errorf(codes.Internal, "delete failed: %v", err)
 	}
+
+	logger.Log.Info("user deleted in successfully", zap.Int("id", requestedId), zap.String("role", tokenRole))
 
 	return nil, nil
 }
