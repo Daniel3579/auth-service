@@ -89,7 +89,7 @@ func RequestCreate(user_id int) (error, codes.Code) {
 		return fmt.Errorf("token generation failed: %v", err), codes.Internal
 	}
 
-	md := metadata.Pairs("authorization", accessToken)
+	md := metadata.Pairs("authorization_access", accessToken)
 	ctx = metadata.NewOutgoingContext(context.Background(), md)
 
 	// Вызов метода Validate без передачи параметров
